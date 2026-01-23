@@ -5,7 +5,7 @@
 #include "logger.hpp"
 #include "mac_addr.hpp"
 
-namespace mstack {
+namespace uStack {
 struct arp_cache_t {
         std::unordered_map<int, mac_addr_t>         mac_addr_map;
         std::unordered_map<int, ipv4_addr_t>        ipv4_addr_map;
@@ -61,4 +61,4 @@ struct arp_cache_t {
                 return ipv4_addr_map[tag];
         }
 };
-}  // namespace mstack
+}  // namespace uStack
