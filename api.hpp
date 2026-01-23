@@ -2,6 +2,8 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "arp.hpp"
+
 namespace uStack {
 int init_logger(int argc, char* argv[]) {
         FLAGS_logtostderr      = true;
