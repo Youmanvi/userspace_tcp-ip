@@ -2,9 +2,13 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "ethernet.hpp"
 #include "arp.hpp"
+#include "ethernet.hpp"
 #include "icmp.hpp"
+#include "ipv4.hpp"
+#include "socket_manager.hpp"
+#include "tcb_manager.hpp"
+#include "tcp.hpp"
 
 namespace uStack {
 int init_logger(int argc, char* argv[]) {
