@@ -4,6 +4,8 @@
 
 #include "ethernet.hpp"
 #include "arp.hpp"
+#include "icmp.hpp"
+
 namespace uStack {
 int init_logger(int argc, char* argv[]) {
         FLAGS_logtostderr      = true;
