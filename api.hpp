@@ -9,6 +9,7 @@
 #include "socket_manager.hpp"
 #include "tcb_manager.hpp"
 #include "tcp.hpp"
+#include "tuntap.hpp"
 
 namespace uStack {
 int init_logger(int argc, char* argv[]) {
