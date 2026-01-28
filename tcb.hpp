@@ -9,8 +9,18 @@
 #include "ipv4_addr.hpp"
 #include "packets.hpp"
 #include "tcp_header.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* tcb_doc = R"(
+FILE: tcb.hpp
+PURPOSE: TCP Control Block structure. Contains: state, send/receive queues, connection info.
+)";
+}
+
 using port_addr_t = uint16_t;
+
 struct send_state_t {
         uint32_t                  unacknowledged = 0;
         uint32_t                  next           = 0;
