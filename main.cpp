@@ -2,6 +2,13 @@
 #include <iostream>
 #include "api.hpp"
 
+namespace docs {
+static const char* main_doc = R"(
+FILE: main.cpp
+PURPOSE: Example echo server. Starts stack, creates listening socket, accepts connections, reads data.
+)";
+}
+
 int main(int argc, char* argv[]) {
         auto stack = std::async(std::launch::async, uStack::init_stack, argc, argv);
         int  fd    = uStack::socket(0x06, uStack::ipv4_addr_t("192.168.1.1"), 30000);
