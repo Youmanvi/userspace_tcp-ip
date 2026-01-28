@@ -5,7 +5,15 @@
 #include "defination.hpp"
 #include "logger.hpp"
 #include "packets.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* arp_doc = R"(
+FILE: arp.hpp
+PURPOSE: ARP protocol. Methods: id(), make_packet(), query_by_ipv4(), register_dev(), send_reply().
+)";
+}
 
 class arp : public base_protocol<ethernetv2_packet, ipv4_packet, arp> {
 public:
