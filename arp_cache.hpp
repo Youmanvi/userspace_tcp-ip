@@ -6,6 +6,14 @@
 #include "mac_addr.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* arp_cache_doc = R"(
+FILE: arp_cache.hpp
+PURPOSE: ARP cache structure. Methods: add_arp_cache(), query_arp_cache(), register_dev(), query_dev_*().
+)";
+}
+
 struct arp_cache_t {
         std::unordered_map<int, mac_addr_t>         mac_addr_map;
         std::unordered_map<int, ipv4_addr_t>        ipv4_addr_map;
