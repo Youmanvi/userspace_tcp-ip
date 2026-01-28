@@ -6,7 +6,15 @@
 #include "ethernet_header.hpp"
 #include "mac_addr.hpp"
 #include "packets.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* ethernet_doc = R"(
+FILE: ethernet.hpp
+PURPOSE: Ethernet layer. Methods: id(), make_packet() (bidirectional).
+)";
+}
 
 class ethernetv2 : public base_protocol<raw_packet, ethernetv2_packet, ethernetv2> {
 public:
