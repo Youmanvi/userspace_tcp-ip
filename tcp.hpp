@@ -2,7 +2,16 @@
 #include "base_protocol.hpp"
 #include "packets.hpp"
 #include "tcp_header.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* tcp_doc = R"(
+FILE: tcp.hpp
+PURPOSE: TCP layer. Methods: id(), make_packet() (bidirectional).
+)";
+}
+
 class tcp : public base_protocol<ipv4_packet, tcp_packet_t, tcp> {
 public:
         constexpr static int PROTO = 0x06;
