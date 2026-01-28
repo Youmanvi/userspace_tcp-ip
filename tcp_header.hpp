@@ -1,6 +1,21 @@
 #pragma once
 #include "utils.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* tcp_header_doc = R"(
+FILE: tcp_header.hpp
+PURPOSE: TCP header (20 bytes). Methods: consume(), produce(), size().
+FLAGS: SYN, ACK, FIN, RST, PSH, URG.
+
+LIMITATIONS: No options, ISN not random, no SACK/timestamps
+
+PSEUDO-HEADER (for checksum):
+[src_ip(4)][dst_ip(4)][0(1)][proto(1)][tcp_len(2)]
+)";
+}
+
 struct tcp_header_t {
         using port_addr_t = uint16_t;
         port_addr_t src_port;
