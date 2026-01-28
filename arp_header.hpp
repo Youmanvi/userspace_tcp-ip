@@ -4,6 +4,14 @@
 #include "utils.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* arp_header_doc = R"(
+FILE: arp_header.hpp
+PURPOSE: ARP header (28 bytes). Methods: consume(), produce(), size().
+)";
+}
+
 struct arpv4_header_t {
         uint16_t    hw_type    = 0;
         uint16_t    proto_type = 0;
