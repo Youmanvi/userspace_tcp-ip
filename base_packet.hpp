@@ -3,7 +3,15 @@
 #include <optional>
 
 #include "logger.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* base_packet_doc = R"(
+FILE: base_packet.hpp
+PURPOSE: Packet buffer with header stacking. Methods: reflush_packet(), get_pointer(), add_offset(), get_remaining_len(), get_total_len(), export_data().
+)";
+}
 
 class base_packet {
 private:
