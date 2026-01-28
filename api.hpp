@@ -12,6 +12,14 @@
 #include "tuntap.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* api_doc = R"(
+FILE: api.hpp
+PURPOSE: Public API. Functions: init_logger(), init_stack(), socket(), listen(), accept(), read(), write().
+)";
+}
+
 int init_logger(int argc, char* argv[]) {
         FLAGS_logtostderr      = true;
         FLAGS_minloglevel      = 0;
