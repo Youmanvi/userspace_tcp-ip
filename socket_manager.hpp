@@ -3,7 +3,16 @@
 #include "defination.hpp"
 #include "socket.hpp"
 #include "tcb_manager.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* socket_manager_doc = R"(
+FILE: socket_manager.hpp
+PURPOSE: Socket API manager. Methods: register_socket(), listen(), accept(), read(), write().
+)";
+}
+
 class socket_manager {
 private:
         socket_manager()  = default;

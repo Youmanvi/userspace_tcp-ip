@@ -1,5 +1,14 @@
 #pragma once
+
 namespace uStack {
+
+namespace docs {
+static const char* defination_doc = R"(
+FILE: defination.hpp
+PURPOSE: Constants - TCP/Socket states, device tags. Function: state_to_string().
+)";
+}
+
 static constexpr int TUNTAP_DEV = 0x01;
 
 constexpr static int TCP_CLOSED       = 0x10;

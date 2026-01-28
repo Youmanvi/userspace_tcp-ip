@@ -6,6 +6,13 @@
 
 namespace uStack {
 
+namespace docs {
+static const char* ethernet_header_doc = R"(
+FILE: ethernet_header.hpp
+PURPOSE: Ethernet header (14 bytes). Methods: consume(), produce(), size().
+)";
+}
+
 struct ethernetv2_header_t {
         mac_addr_t dst_mac_addr;
         mac_addr_t src_mac_addr;

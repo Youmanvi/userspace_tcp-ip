@@ -3,7 +3,16 @@
 #include "base_protocol.hpp"
 #include "ipv4_header.hpp"
 #include "packets.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* ipv4_doc = R"(
+FILE: ipv4.hpp
+PURPOSE: IPv4 layer. Methods: id(), make_packet() (bidirectional).
+)";
+}
+
 class ipv4 : public base_protocol<ethernetv2_packet, ipv4_packet, ipv4> {
 public:
         arp&                 arp_instance = arp::instance();

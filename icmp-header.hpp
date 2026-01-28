@@ -2,6 +2,16 @@
 #include "utils.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* icmp_header_doc = R"(
+FILE: icmp-header.hpp
+PURPOSE: ICMP header (8 bytes). Methods: consume(), produce(), size().
+)";
+}
+)";
+}
+
 struct icmp_header_t {
         uint8_t  proto_type = 0;
         uint8_t  code       = 0;

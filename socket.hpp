@@ -5,7 +5,16 @@
 #include "defination.hpp"
 #include "packets.hpp"
 #include "tcb.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* socket_doc = R"(
+FILE: socket.hpp
+PURPOSE: Socket structures - socket_t (active) and listener_t (passive).
+)";
+}
+
 struct socket_t {
         int                                   fd;
         int                                   state = SOCKET_UNCONNECTED;

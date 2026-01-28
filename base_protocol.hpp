@@ -3,7 +3,15 @@
 #include <iomanip>
 
 #include "circle_buffer.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* base_protocol_doc = R"(
+FILE: base_protocol.hpp
+PURPOSE: Base template for protocol layers. Methods: receive(), gather_packet(), dispatch(), register_upper_protocol(), enter_send_queue().
+)";
+}
 
     template <typename UnderPacketType, typename UpperPacketType, typename ChildType>
     class base_protocol {

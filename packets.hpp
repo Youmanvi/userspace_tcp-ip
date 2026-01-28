@@ -2,7 +2,15 @@
 #include "base_packet.hpp"
 #include "ipv4_addr.hpp"
 #include "mac_addr.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* packets_doc = R"(
+FILE: packets.hpp
+PURPOSE: Packet structures - raw_packet, ethernetv2_packet, ipv4_packet, tcp_packet_t, nop_packet.
+)";
+}
 
 struct nop_packet {
         uint16_t proto;

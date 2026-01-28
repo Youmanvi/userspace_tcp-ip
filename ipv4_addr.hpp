@@ -5,6 +5,14 @@
 #include "utils.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* ipv4_addr_doc = R"(
+FILE: ipv4_addr.hpp
+PURPOSE: IPv4 address type (32-bit). Methods: consume(), produce(), get_raw_ipv4(), size().
+)";
+}
+
 class ipv4_addr_t {
 private:
         uint32_t _ipv4 = 0;

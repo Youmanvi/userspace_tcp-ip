@@ -10,7 +10,42 @@
 #include "socket.hpp"
 #include "tcb.hpp"
 #include "tcp_transmit.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* tcb_manager_doc = R"(
+FILE: tcb_manager.hpp
+PURPOSE: TCP Control Block manager. Methods: receive(), gather_packet(), listen(), register_listener().
+
+SINGLETON PATTERN:
+tcb_manager& mgr = tcb_manager::instance();
+
+CURRENT IMPLEMENTATION NOTES:
+- No connection timeout
+- No connection limits
+- No maximum TCB count
+- No TIME_WAIT enforcement (immediate state transition)
+- Linear search of active_tcbs (O(n) for n active connections)
+- No connection pooling or reuse
+- No half-open connection detection
+- No syn-flood protection
+
+MEMORY USAGE:
+- Each TCB: ~200+ bytes (data structures, pointers)
+- TCB with 10KB window: ~210 bytes + queued packets
+- 100 active connections: ~21 KB TCBs + queue data
+- Listener structures: ~100 bytes each
+- Maps and sets: ~50 bytes + bucket overhead per entry
+
+THREADING:
+- Single-threaded (no locks)
+- Safe only if all TCP operations from one thread
+- Called from tcp_layer (protocol processing thread)
+- Called from socket_manager (application thread) via send_queue
+)";
+}
+
 class tcb_manager {
 private:
         tcb_manager() : active_tcbs(std::make_shared<circle_buffer<std::shared_ptr<tcb_t>>>()) {}

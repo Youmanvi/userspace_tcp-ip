@@ -3,6 +3,14 @@
 #include "utils.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* ipv4_header_doc = R"(
+FILE: ipv4_header.hpp
+PURPOSE: IPv4 header (20 bytes). Methods: consume(), produce(), size().
+)";
+}
+
 struct ipv4_header_t {
         uint8_t     version : 4;
         uint8_t     header_length : 4;

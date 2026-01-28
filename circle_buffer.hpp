@@ -3,7 +3,15 @@
 #include <memory>
 #include <optional>
 #include <queue>
+
 namespace uStack {
+
+namespace docs {
+static const char* circle_buffer_doc = R"(
+FILE: circle_buffer.hpp
+PURPOSE: FIFO queue wrapper. Methods: push_back(), pop_front(), empty(), size().
+)";
+}
 
     template <typename PacketType>
     class circle_buffer {

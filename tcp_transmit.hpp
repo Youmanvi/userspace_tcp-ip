@@ -3,6 +3,14 @@
 #include "tcb.hpp"
 
 namespace uStack {
+
+namespace docs {
+static const char* tcp_transmit_doc = R"(
+FILE: tcp_transmit.hpp
+PURPOSE: TCP state machine. Function: process(tcb, segment).
+)";
+}
+
 class tcp_transmit {
 public:
         static void tcp_send_ack() {}

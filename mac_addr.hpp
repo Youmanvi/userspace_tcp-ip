@@ -7,6 +7,13 @@
 
 namespace uStack {
 
+namespace docs {
+static const char* mac_addr_doc = R"(
+FILE: mac_addr.hpp
+PURPOSE: MAC address type (6 bytes). Methods: consume(), produce(), size().
+)";
+}
+
 struct mac_addr_t {
 private:
         std::array<uint8_t, 6> mac = {0, 0, 0, 0, 0, 0};

@@ -1,7 +1,16 @@
 #include "base_protocol.hpp"
 #include "icmp_header.hpp"
 #include "packets.hpp"
+
 namespace uStack {
+
+namespace docs {
+static const char* icmp_doc = R"(
+FILE: icmp.hpp
+PURPOSE: ICMP protocol (ping). Methods: id(), make_packet(), make_icmp_reply().
+)";
+}
+
 class icmp : public base_protocol<ipv4_packet, nop_packet, icmp> {
 public:
         static constexpr uint16_t PROTO = 0x01;

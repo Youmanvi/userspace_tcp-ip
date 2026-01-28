@@ -17,6 +17,40 @@
 
 namespace uStack {
 
+namespace docs {
+static const char* tuntap_doc = R"(
+FILE: tuntap.hpp
+PURPOSE: TAP device interface. Methods: init(), run(), get_mac_addr(), get_ipv4_addr().
+- run() blocks in event loop
+- poll() handles kernel-level multiplexing
+- Single-threaded protocol processing
+
+CURRENT IMPLEMENTATION NOTES:
+- Fixed device name (tap0)
+- Fixed IP address (192.168.1.1)
+- Fixed route (192.168.1.0/24)
+- No hot-plugging support
+- No device removal/cleanup
+- No MTU adjustment
+- No promiscuous mode
+- No multicast handling
+- poll() blocks forever (-1 timeout)
+- No shutdown mechanism (Ctrl+C to stop)
+
+PERFORMANCE CHARACTERISTICS:
+- poll() latency: ~1ms kernel call overhead
+- Copy latency: ~microseconds for MTU-sized packets
+- Throughput: Limited by kernel tun/tap implementation
+- CPU: Single-core CPU loop (could parallelize with epoll)
+
+SECURITY CONSIDERATIONS:
+- Requires root or CAP_NET_ADMIN to create device
+- All packets readable/writable by process
+- No authentication of packet source
+- No encryption (virtual device, local only)
+)";
+}
+
 template <int mtu>
 class tuntap {
 public:

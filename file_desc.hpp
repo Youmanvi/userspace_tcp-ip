@@ -12,6 +12,15 @@
 
 namespace uStack {
 
+namespace docs {
+static const char* file_desc_doc = R"(
+FILE: file_desc.hpp
+PURPOSE: File descriptor RAII wrapper. Methods: open(), from_fd(), get_fd(), ioctl().
+
+USAGE: Used by tuntap.hpp for /dev/net/tun device control
+)";
+}
+
 class file_desc {
 private:
         int _fd;

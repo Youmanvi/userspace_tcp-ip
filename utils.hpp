@@ -3,7 +3,16 @@
 
 #include <cstdint>
 #include <cstdio>
+
 namespace uStack {
+
+namespace docs {
+static const char* utils_doc = R"(
+FILE: utils.hpp
+PURPOSE: Utilities - ntoh(), consume(), produce(), checksum(), format(), run_cmd(), set_interface_*().
+)";
+}
+
     namespace utils {
 
     template <typename... A>
