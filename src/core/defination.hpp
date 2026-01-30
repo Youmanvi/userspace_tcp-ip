@@ -51,6 +51,8 @@ std::string state_to_string(int state) {
                         return "TCP_LAST_ACK";
                 case TCP_TIME_WAIT:
                         return "TCP_TIME_WAIT";
+                default:
+                        return "UNKNOWN";
         }
 }
 };  // namespace uStack
