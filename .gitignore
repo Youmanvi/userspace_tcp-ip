@@ -36,3 +36,6 @@ Thumbs.db
 nul
 *.nul
 .claude/settings.local.json
+docs/LOGGING.md
+docs/LOGGING_EXAMPLES.md
+docs/LOGGING_IMPLEMENTATION.md
