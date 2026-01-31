@@ -14,9 +14,62 @@ PURPOSE: TCP state machine. Function: process(tcb, segment).
 
 class tcp_transmit {
 public:
-        static void tcp_send_ack() {}
+        static void tcp_send_ack(std::shared_ptr<tcb_t> tcb) {
+                auto out_buffer = std::make_unique<base_packet>(tcp_header_t::size());
+                tcp_header_t out_tcp;
+
+                out_tcp.src_port       = tcb->local_info->port_addr.value();
+                out_tcp.dst_port       = tcb->remote_info->port_addr.value();
+                out_tcp.seq_no         = tcb->send.next;
+                out_tcp.ack_no         = tcb->receive.next;
+                out_tcp.window_size    = tcb->receive.window;
+                out_tcp.header_length  = tcp_header_t::size() / 4;
+                out_tcp.ACK            = 1;
+
+                out_tcp.produce(out_buffer->get_pointer());
+
+                tcp_packet_t out_packet = {.proto       = 0x06,
+                                           .remote_info = tcb->remote_info,
+                                           .local_info  = tcb->local_info,
+                                           .buffer      = std::move(out_buffer)};
+
+                tcb->ctl_packets.push_back(std::move(out_packet));
+                DLOG(INFO) << "[SEND ACK]";
+        }
+
         static void tcp_send_syn_ack() {}
-        static void tcp_send_rst() {}
+
+        static void tcp_send_rst(std::shared_ptr<tcb_t> tcb, tcp_header_t& in_tcp, int seg_len) {
+                auto out_buffer = std::make_unique<base_packet>(tcp_header_t::size());
+                tcp_header_t out_tcp;
+
+                out_tcp.src_port      = tcb->local_info->port_addr.value();
+                out_tcp.dst_port      = tcb->remote_info->port_addr.value();
+                out_tcp.header_length = tcp_header_t::size() / 4;
+                out_tcp.RST           = 1;
+
+                if (in_tcp.ACK == 1) {
+                        // RFC 793: <SEQ=SEG.ACK><CTL=RST>
+                        out_tcp.seq_no = in_tcp.ack_no;
+                        out_tcp.ACK    = 0;
+                } else {
+                        // RFC 793: <SEQ=0><ACK=SEG.SEQ+SEG.LEN><CTL=RST,ACK>
+                        out_tcp.seq_no = 0;
+                        out_tcp.ack_no = in_tcp.seq_no + seg_len;
+                        out_tcp.ACK    = 1;
+                }
+
+                out_tcp.produce(out_buffer->get_pointer());
+
+                tcp_packet_t out_packet = {.proto       = 0x06,
+                                           .remote_info = tcb->remote_info,
+                                           .local_info  = tcb->local_info,
+                                           .buffer      = std::move(out_buffer)};
+
+                tcb->ctl_packets.push_back(std::move(out_packet));
+                DLOG(INFO) << "[SEND RST]";
+        }
+
         static void tcp_send_ctl() {}
 
         static int generate_iss() { return 0; }
