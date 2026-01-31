@@ -72,7 +72,22 @@ public:
 
         static void tcp_send_ctl() {}
 
-        static int generate_iss() { return 0; }
+        static int generate_iss() {
+                // RFC 793: ISN should not be easily predictable
+                // Use combination of high-resolution time and random value
+                auto now = std::chrono::high_resolution_clock::now();
+                auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+
+                // Generate random value
+                static std::random_device rd;
+                static std::mt19937 gen(rd());
+                std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX);
+                uint32_t random_val = dis(gen);
+
+                // Combine time and random for unpredictable ISN
+                uint32_t iss = static_cast<uint32_t>(ns ^ random_val);
+                return iss;
+        }
 
         static bool tcp_handle_close_state(std::shared_ptr<tcb_t> in_tcb, tcp_packet_t& in_packet) {
                 tcp_header_t in_tcp = tcp_header_t::consume(in_packet.buffer->get_pointer());
