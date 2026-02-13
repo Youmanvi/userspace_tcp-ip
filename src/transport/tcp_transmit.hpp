@@ -616,11 +616,13 @@ public:
                                 case TCP_CLOSING:
                                         if (in_tcb->send.unacknowledged < in_tcp.ack_no &&
                                             in_tcp.ack_no <= in_tcb->send.next) {
+                                                // NEW ACK - advances the window
                                                 // Calculate bytes that were just acknowledged
                                                 uint32_t bytes_acked = in_tcp.ack_no - in_tcb->send.unacknowledged;
 
                                                 // Update unacknowledged pointer
                                                 in_tcb->send.unacknowledged = in_tcp.ack_no;
+                                                in_tcb->send.last_ack_no = in_tcp.ack_no;
 
                                                 // Update bytes in flight (congestion control)
                                                 if (in_tcb->send.bytes_in_flight >= bytes_acked) {
@@ -628,6 +630,19 @@ public:
                                                 } else {
                                                         in_tcb->send.bytes_in_flight = 0;
                                                 }
+
+                                                // Fast Recovery exit: new ACK received during fast recovery
+                                                if (in_tcb->send.dupacks >= 3) {
+                                                        // Exit fast recovery
+                                                        in_tcb->deflate_window_exit_fast_recovery();
+
+                                                        DLOG(INFO) << "[FAST RECOVERY EXIT] New ACK received"
+                                                                   << " ack_no=" << in_tcp.ack_no
+                                                                   << " cwnd=" << in_tcb->send.cwnd;
+                                                }
+
+                                                // Reset duplicate ACK counter (new ACK received)
+                                                in_tcb->send.dupacks = 0;
 
                                                 // TCP Reno: Slow Start and Congestion Avoidance (RFC 5681)
                                                 if (in_tcb->state == TCP_ESTABLISHED && in_tcb->send.cwnd > 0) {
@@ -654,7 +669,40 @@ public:
                                         }
 
                                         if (in_tcp.ack_no <
-                                            in_tcb->send.unacknowledged) { /* ignore */
+                                            in_tcb->send.unacknowledged) {
+                                                // DUPLICATE ACK or OLD ACK
+                                                // RFC 5681 Fast Retransmit: detect loss via duplicate ACKs
+
+                                                // Check if this is a duplicate (same ACK number as before)
+                                                if (in_tcp.ack_no == in_tcb->send.last_ack_no) {
+                                                        in_tcb->send.dupacks++;
+
+                                                        DLOG(INFO) << "[DUPLICATE ACK] ack_no=" << in_tcp.ack_no
+                                                                   << " dupacks=" << in_tcb->send.dupacks;
+
+                                                        // Fast Retransmit on 3rd duplicate ACK
+                                                        if (in_tcb->send.dupacks == 3) {
+                                                                DLOG(INFO) << "[FAST RETRANSMIT] Detected 3 duplicate ACKs"
+                                                                           << " ack_no=" << in_tcp.ack_no
+                                                                           << " unacknowledged=" << in_tcb->send.unacknowledged;
+
+                                                                // Enter Fast Recovery
+                                                                in_tcb->enter_fast_recovery();
+
+                                                                // TODO: Retransmit the unacknowledged segment
+                                                                // (requires implementation of segment retransmission)
+                                                                // For now, just log the action
+                                                                DLOG(INFO) << "[TODO] Retransmit segment at seq=" << in_tcb->send.unacknowledged;
+                                                        } else if (in_tcb->send.dupacks > 3) {
+                                                                // Additional duplicate ACKs during Fast Recovery
+                                                                // RFC 5681: Inflate window (cwnd += SMSS)
+                                                                in_tcb->inflate_window_for_fast_recovery();
+                                                        }
+                                                } else {
+                                                        // Different (older) ACK number - reset duplicate counter
+                                                        in_tcb->send.dupacks = 0;
+                                                        in_tcb->send.last_ack_no = in_tcp.ack_no;
+                                                }
                                         }
 
                                         if (in_tcp.ack_no > in_tcb->send.next) {
