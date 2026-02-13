@@ -86,8 +86,10 @@ struct tcb_t : public std::enable_shared_from_this<tcb_t> {
         void init_congestion_control() {
                 // TCP Reno: initial cwnd = 2-4 MSS, but commonly 1 MSS
                 send.cwnd = send.mss;
-                // Initial slow start threshold = 65535 (large, effectively disabled)
-                send.ssthresh = 65535;
+                // Initial slow start threshold = 64KB (typical value)
+                // RFC 5681 recommends: max(2*SMSS, 4380 bytes)
+                // We use 64KB for reasonable slow start phase duration
+                send.ssthresh = 65536;  // ~45 MSS for testing/demo
                 send.bytes_in_flight = 0;
         }
 
@@ -95,6 +97,21 @@ struct tcb_t : public std::enable_shared_from_this<tcb_t> {
         // Called by make_packet() when actually sending data
         void track_bytes_sent(uint32_t bytes) {
                 send.bytes_in_flight += bytes;
+        }
+
+        // Handle congestion event (loss detected)
+        // Called when packet loss is detected (timeout or duplicate ACKs)
+        void on_congestion_event() {
+                // RFC 5681: When congestion is detected (loss)
+                // ssthresh = max(cwnd / 2, 2 * SMSS)
+                // cwnd = SMSS (or ssthresh for fast recovery)
+                send.ssthresh = (send.cwnd > 2 * send.mss) ?
+                                (send.cwnd / 2) : (2 * send.mss);
+                send.cwnd = send.mss;  // Restart slow start
+                send.dupacks = 0;      // Reset duplicate ACK counter
+
+                DLOG(INFO) << "[CONGESTION EVENT] cwnd reset to " << send.cwnd
+                           << " ssthresh=" << send.ssthresh;
         }
 
         void active_self() { _active_tcbs->push_back(shared_from_this()); }
