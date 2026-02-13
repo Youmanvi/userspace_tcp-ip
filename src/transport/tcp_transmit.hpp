@@ -612,10 +612,33 @@ public:
                                                 in_tcb->next_state = TCP_ESTABLISHED;
                                                 // Initialize congestion control (TCP Reno)
                                                 in_tcb->init_congestion_control();
-                                                in_tcb->listen_finish();
+
+                                                // NEW: Check listener backlog limit before queuing
+                                                if (in_tcb->_listener) {
+                                                        // Check if this listener's backlog is full
+                                                        auto& mgr = tcb_manager::instance();
+                                                        ipv4_port_t local_port = in_tcb->local_info.value();
+
+                                                        if (!mgr.can_queue_to_backlog(local_port)) {
+                                                                // Backlog is full - reject connection
+                                                                DLOG(WARNING) << "[BACKLOG FULL] Rejecting connection"
+                                                                              << " local=" << local_port.port_addr.value()
+                                                                              << " remote=" << in_tcp.seq_no;
+                                                                tcp_send_rst(in_tcb, in_tcp, 0);
+                                                                return;
+                                                        }
+
+                                                        // Backlog has space - queue to acceptors
+                                                        in_tcb->listen_finish();
+                                                        // Track connection in backlog
+                                                        mgr.track_backlog_queued(local_port);
+                                                } else {
+                                                        // No listener - shouldn't happen for passive open
+                                                        DLOG(WARNING) << "[ESTABLISH] No listener for TCB";
+                                                }
                                                 // in_tcb->receive.next += 1;
                                         } else {
-                                                tcp_send_rst();
+                                                tcp_send_rst(in_tcb, in_tcp, 0);
                                                 return;
                                         }
                                         break;
