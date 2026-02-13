@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdlib>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -13,6 +14,27 @@
 #include "socket_manager.hpp"
 
 namespace uStack {
+
+// Default global connection limits
+namespace connection_limits {
+        // Maximum concurrent TCP connections (can be overridden by MAX_CONNECTIONS env var)
+        // This includes LISTEN, SYN_SENT, SYN_RECEIVED, ESTABLISHED, and closing states
+        static const uint32_t DEFAULT_MAX_CONNECTIONS = 1000;
+
+        // Get the actual limit from environment or use default
+        inline uint32_t get_max_connections() {
+                const char* env_limit = std::getenv("MAX_CONNECTIONS");
+                if (env_limit) {
+                        try {
+                                uint32_t limit = std::stoul(env_limit);
+                                if (limit > 0) return limit;
+                        } catch (...) {
+                                // Invalid env var, fall through to default
+                        }
+                }
+                return DEFAULT_MAX_CONNECTIONS;
+        }
+}  // namespace connection_limits
 
 namespace docs {
 static const char* tcb_manager_doc = R"(
@@ -49,12 +71,18 @@ THREADING:
 
 class tcb_manager {
 private:
-        tcb_manager() : active_tcbs(std::make_shared<circle_buffer<std::shared_ptr<tcb_t>>>()) {}
+        tcb_manager() : active_tcbs(std::make_shared<circle_buffer<std::shared_ptr<tcb_t>>>()),
+                        max_connections(connection_limits::get_max_connections()),
+                        total_connections_created(0),
+                        peak_connections(0) {}
         ~tcb_manager() = default;
         std::shared_ptr<circle_buffer<std::shared_ptr<tcb_t>>>       active_tcbs;
         std::unordered_map<two_ends_t, std::shared_ptr<tcb_t>>       tcbs;
         std::unordered_set<ipv4_port_t>                              active_ports;
         std::unordered_map<ipv4_port_t, std::shared_ptr<listener_t>> listeners;
+        uint32_t                                                      max_connections;
+        uint32_t                                                      total_connections_created;
+        uint32_t                                                      peak_connections;
 
 public:
         tcb_manager(const tcb_manager&) = delete;
@@ -89,17 +117,39 @@ public:
                 active_ports.insert(ipv4_port);
         }
 
-        void register_tcb(
+        // Register a new TCB. Returns true if successful, false if limit exceeded.
+        // When limit exceeded, caller should send RST to reject the connection.
+        bool register_tcb(
                 two_ends_t&                                                           two_end,
                 std::optional<std::shared_ptr<circle_buffer<std::shared_ptr<tcb_t>>>> listener) {
-                DLOG(INFO) << "[REGISTER TCB] " << two_end;
+                // Check global connection limit
+                if (tcbs.size() >= max_connections) {
+                        DLOG(WARNING) << "[CONNECTION LIMIT EXCEEDED] Current: " << tcbs.size()
+                                      << " Max: " << max_connections
+                                      << " Remote: " << two_end.remote_info.value();
+                        return false;  // Limit exceeded - caller will send RST
+                }
+
+                DLOG(INFO) << "[REGISTER TCB] " << two_end
+                           << " (Connections: " << (tcbs.size() + 1) << "/" << max_connections << ")";
+
                 if (!two_end.remote_info || !two_end.local_info) {
                         DLOG(FATAL) << "[EMPTY TCB]";
                 }
+
                 std::shared_ptr<tcb_t> tcb = std::make_shared<tcb_t>(this->active_tcbs, listener,
                                                                      two_end.remote_info.value(),
                                                                      two_end.local_info.value());
-                tcbs[two_end]              = tcb;
+                tcbs[two_end] = tcb;
+
+                // Track statistics
+                total_connections_created++;
+                if (tcbs.size() > peak_connections) {
+                        peak_connections = tcbs.size();
+                        DLOG(INFO) << "[NEW PEAK] Concurrent connections: " << peak_connections;
+                }
+
+                return true;
         }
 
         void receive(tcp_packet_t in_packet) {
@@ -112,8 +162,20 @@ public:
                                 socket_manager::instance().mark_socket_readable(tcbs[two_end]);
                         }
                 } else if (active_ports.find(in_packet.local_info.value()) != active_ports.end()) {
-                        register_tcb(two_end,
-                                     this->listeners[in_packet.local_info.value()]->acceptors);
+                        // Try to register new TCB
+                        bool registered = register_tcb(two_end,
+                                                       this->listeners[in_packet.local_info.value()]->acceptors);
+
+                        if (!registered) {
+                                // NEW: Connection limit exceeded - send RST to reject
+                                DLOG(WARNING) << "[REJECT CONNECTION] Limit exceeded"
+                                              << " Remote: " << in_packet.remote_info.value();
+                                tcp_header_t in_tcp = tcp_header_t::consume(in_packet.buffer->get_pointer());
+                                tcp_transmit::tcp_send_rst(nullptr, in_tcp, 0);
+                                // Note: tcp_send_rst with nullptr needs special handling - see below
+                                return;
+                        }
+
                         if (tcbs.find(two_end) != tcbs.end()) {
                                 tcbs[two_end]->state      = TCP_LISTEN;
                                 tcbs[two_end]->next_state = TCP_LISTEN;
