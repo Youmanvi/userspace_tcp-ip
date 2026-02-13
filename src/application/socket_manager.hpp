@@ -89,6 +89,10 @@ public:
                                 socket->fd                       = i;
                                 sockets[i]                       = socket;
 
+                                // NEW: Track backlog dequeue when connection is accepted
+                                auto& mgr = tcb_manager::instance();
+                                mgr.track_backlog_dequeued(listener->local_info.value());
+
                                 // Clear acceptable if queue now empty
                                 if (listener->acceptors->empty()) {
                                         listener->acceptable = false;
