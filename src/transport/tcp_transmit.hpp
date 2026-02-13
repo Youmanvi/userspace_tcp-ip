@@ -631,6 +631,9 @@ public:
                                                         in_tcb->send.bytes_in_flight = 0;
                                                 }
 
+                                                // NEW: Remove acknowledged segments from retransmit queue
+                                                in_tcb->remove_acked_segments(in_tcp.ack_no);
+
                                                 // Fast Recovery exit: new ACK received during fast recovery
                                                 if (in_tcb->send.dupacks >= 3) {
                                                         // Exit fast recovery
@@ -689,10 +692,16 @@ public:
                                                                 // Enter Fast Recovery
                                                                 in_tcb->enter_fast_recovery();
 
-                                                                // TODO: Retransmit the unacknowledged segment
-                                                                // (requires implementation of segment retransmission)
-                                                                // For now, just log the action
-                                                                DLOG(INFO) << "[TODO] Retransmit segment at seq=" << in_tcb->send.unacknowledged;
+                                                                // Retransmit the lost segment
+                                                                bool retransmitted = in_tcb->retransmit_segment(in_tcb->send.unacknowledged);
+
+                                                                if (retransmitted) {
+                                                                        DLOG(INFO) << "[FAST RETRANSMIT] Retransmitted segment seq="
+                                                                                   << in_tcb->send.unacknowledged;
+                                                                } else {
+                                                                        DLOG(WARNING) << "[FAST RETRANSMIT] Could not find segment to retransmit seq="
+                                                                                      << in_tcb->send.unacknowledged;
+                                                                }
                                                         } else if (in_tcb->send.dupacks > 3) {
                                                                 // Additional duplicate ACKs during Fast Recovery
                                                                 // RFC 5681: Inflate window (cwnd += SMSS)
