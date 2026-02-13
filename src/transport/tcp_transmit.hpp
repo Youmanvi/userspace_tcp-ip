@@ -577,6 +577,8 @@ public:
                                             in_tcp.ack_no <= in_tcb->send.next) {
                                                 in_tcb->state      = TCP_ESTABLISHED;
                                                 in_tcb->next_state = TCP_ESTABLISHED;
+                                                // Initialize congestion control (TCP Reno)
+                                                in_tcb->init_congestion_control();
                                                 in_tcb->listen_finish();
                                                 // in_tcb->receive.next += 1;
                                         } else {

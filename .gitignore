@@ -1,4 +1,4 @@
-# Build artifacts
+how # Build artifacts
 *.o
 *.a
 *.so
@@ -39,3 +39,6 @@ nul
 docs/LOGGING.md
 docs/LOGGING_EXAMPLES.md
 docs/LOGGING_IMPLEMENTATION.md
+EVENT_LOOP_GUIDE.md
+IMPLEMENTATION_COMPLETE.md
+IMPLEMENTATION_TECHNICAL_NOTES.md

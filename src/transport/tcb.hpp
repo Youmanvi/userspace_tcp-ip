@@ -26,7 +26,7 @@ struct send_state_t {
         uint32_t                  next           = 0;
         uint32_t                  window         = 0;
         int8_t                    window_sale    = 0;
-        uint16_t                  mss            = 0;
+        uint16_t                  mss            = 1460;  // Default MSS (1500 - 40 for IP/TCP headers)
         uint32_t                  cwnd           = 0;
         uint32_t                  ssthresh       = 0;
         uint16_t                  dupacks        = 0;
@@ -35,6 +35,9 @@ struct send_state_t {
         std::chrono::milliseconds rttvar;
         std::chrono::milliseconds srtt;
         std::chrono::milliseconds rto;
+
+        // Congestion avoidance: track bytes sent but not yet acknowledged
+        uint32_t bytes_in_flight = 0;
 };
 
 struct receive_state_t {
@@ -78,9 +81,28 @@ struct tcb_t : public std::enable_shared_from_this<tcb_t> {
                 }
         }
 
+        // Initialize congestion control parameters (RFC 5681)
+        // Called when connection enters ESTABLISHED state
+        void init_congestion_control() {
+                // TCP Reno: initial cwnd = 2-4 MSS, but commonly 1 MSS
+                send.cwnd = send.mss;
+                // Initial slow start threshold = 65535 (large, effectively disabled)
+                send.ssthresh = 65535;
+                send.bytes_in_flight = 0;
+        }
+
         void active_self() { _active_tcbs->push_back(shared_from_this()); }
 
-        bool can_send() { return true; }
+        // TCP Reno: Can only send if bytes in flight < congestion window
+        // Returns true if we can send more data (limited by cwnd)
+        bool can_send() {
+                // If cwnd not initialized yet, allow initial segment (slow start)
+                if (cwnd == 0) {
+                        return true;  // First segment always allowed
+                }
+                // Congestion control: limit sending to cwnd
+                return bytes_in_flight < cwnd;
+        }
 
         std::optional<std::unique_ptr<base_packet>> prepare_data_optional(int& option_len) {
                 return std::nullopt;
