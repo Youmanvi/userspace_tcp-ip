@@ -75,7 +75,11 @@ public:
                         std::optional<std::shared_ptr<tcb_t>> tcb = active_tcbs->pop_front();
                         if (!tcb) continue;
                         std::optional<tcp_packet_t> tcp_packet = tcb.value()->gather_packet();
-                        if (tcp_packet) return tcp_packet;
+                        if (tcp_packet) {
+                                // NEW: Track segment for retransmission (if it contains data)
+                                tcb.value()->track_sent_segment(tcp_packet.value());
+                                return tcp_packet;
+                        }
                 }
                 return std::nullopt;
         }
