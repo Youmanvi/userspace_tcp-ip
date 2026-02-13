@@ -629,16 +629,27 @@ public:
                                                         in_tcb->send.bytes_in_flight = 0;
                                                 }
 
-                                                // TCP Reno Congestion Avoidance (only in ESTABLISHED state)
+                                                // TCP Reno: Slow Start and Congestion Avoidance (RFC 5681)
                                                 if (in_tcb->state == TCP_ESTABLISHED && in_tcb->send.cwnd > 0) {
-                                                        // Increase cwnd by (MSS * MSS) / cwnd per ACK
-                                                        // This approximates adding 1 MSS per RTT
-                                                        uint32_t cwnd_increase = (in_tcb->send.mss * in_tcb->send.mss) / in_tcb->send.cwnd;
-                                                        if (cwnd_increase == 0) cwnd_increase = 1;
-                                                        in_tcb->send.cwnd += cwnd_increase;
+                                                        if (in_tcb->send.cwnd < in_tcb->send.ssthresh) {
+                                                                // SLOW START: Exponential growth
+                                                                // Increase cwnd by 1 MSS per ACK (doubles every RTT)
+                                                                in_tcb->send.cwnd += in_tcb->send.mss;
 
-                                                        DLOG(INFO) << "[CONGESTION AVOIDANCE] cwnd=" << in_tcb->send.cwnd
-                                                                   << " bytes_in_flight=" << in_tcb->send.bytes_in_flight;
+                                                                DLOG(INFO) << "[SLOW START] cwnd=" << in_tcb->send.cwnd
+                                                                           << " ssthresh=" << in_tcb->send.ssthresh
+                                                                           << " bytes_in_flight=" << in_tcb->send.bytes_in_flight;
+                                                        } else {
+                                                                // CONGESTION AVOIDANCE: Linear growth
+                                                                // Increase cwnd by (MSS * MSS) / cwnd per ACK
+                                                                // This approximates adding 1 MSS per RTT
+                                                                uint32_t cwnd_increase = (in_tcb->send.mss * in_tcb->send.mss) / in_tcb->send.cwnd;
+                                                                if (cwnd_increase == 0) cwnd_increase = 1;
+                                                                in_tcb->send.cwnd += cwnd_increase;
+
+                                                                DLOG(INFO) << "[CONGESTION AVOIDANCE] cwnd=" << in_tcb->send.cwnd
+                                                                           << " bytes_in_flight=" << in_tcb->send.bytes_in_flight;
+                                                        }
                                                 }
                                         }
 
