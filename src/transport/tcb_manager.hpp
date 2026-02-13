@@ -98,6 +98,35 @@ public:
 public:
         int id() { return 0x06; }
 
+        // Connection limit statistics
+        uint32_t get_current_connections() const { return tcbs.size(); }
+        uint32_t get_max_connections() const { return max_connections; }
+        uint32_t get_peak_connections() const { return peak_connections; }
+        uint32_t get_total_connections_created() const { return total_connections_created; }
+
+        // Check if at capacity
+        bool is_at_capacity() const { return tcbs.size() >= max_connections; }
+
+        // Recalculate connection count (clean up closed/cleaned TCBs if any)
+        uint32_t cleanup_closed_connections() {
+                uint32_t removed = 0;
+                auto it = tcbs.begin();
+                while (it != tcbs.end()) {
+                        if (it->second->state == TCP_CLOSED) {
+                                DLOG(INFO) << "[CLEANUP] Removing closed TCB " << it->first;
+                                it = tcbs.erase(it);
+                                removed++;
+                        } else {
+                                ++it;
+                        }
+                }
+                if (removed > 0) {
+                        DLOG(INFO) << "[CLEANUP COMPLETE] Removed " << removed << " closed connections"
+                                   << " Current: " << tcbs.size() << "/" << max_connections;
+                }
+                return removed;
+        }
+
         std::optional<tcp_packet_t> gather_packet() {
                 while (!active_tcbs->empty()) {
                         std::optional<std::shared_ptr<tcb_t>> tcb = active_tcbs->pop_front();
@@ -171,8 +200,8 @@ public:
                                 DLOG(WARNING) << "[REJECT CONNECTION] Limit exceeded"
                                               << " Remote: " << in_packet.remote_info.value();
                                 tcp_header_t in_tcp = tcp_header_t::consume(in_packet.buffer->get_pointer());
-                                tcp_transmit::tcp_send_rst(nullptr, in_tcp, 0);
-                                // Note: tcp_send_rst with nullptr needs special handling - see below
+                                tcp_transmit::tcp_send_rst_reject(in_tcp, in_packet.remote_info.value(),
+                                                                   in_packet.local_info.value(), 0);
                                 return;
                         }
 
