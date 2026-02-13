@@ -1,7 +1,9 @@
 #pragma once
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -34,7 +36,35 @@ namespace connection_limits {
                 }
                 return DEFAULT_MAX_CONNECTIONS;
         }
+
+        // Get per-port limit from environment variable
+        // Format: MAX_CONNECTIONS_PORT_{PORT}={LIMIT}
+        // Example: MAX_CONNECTIONS_PORT_8080=500
+        inline uint32_t get_port_limit(uint16_t port) {
+                // Build env var name: MAX_CONNECTIONS_PORT_<port>
+                std::string env_var_name = "MAX_CONNECTIONS_PORT_" + std::to_string(port);
+                const char* env_limit = std::getenv(env_var_name.c_str());
+                if (env_limit) {
+                        try {
+                                uint32_t limit = std::stoul(env_limit);
+                                if (limit > 0) return limit;
+                        } catch (...) {
+                                // Invalid env var, fall through to global default
+                        }
+                }
+                // No per-port limit set - use global default
+                return get_max_connections();
+        }
 }  // namespace connection_limits
+
+// Per-port connection statistics
+struct port_connection_stats_t {
+        uint32_t current = 0;           // Current connections on this port
+        uint32_t max = 0;               // Configured limit for this port
+        uint32_t peak = 0;              // Peak concurrent connections
+        uint32_t total_created = 0;     // Total connections ever created
+        uint32_t total_rejected = 0;    // Total connections rejected due to limit
+};
 
 namespace docs {
 static const char* tcb_manager_doc = R"(
@@ -83,6 +113,7 @@ private:
         uint32_t                                                      max_connections;
         uint32_t                                                      total_connections_created;
         uint32_t                                                      peak_connections;
+        std::map<uint16_t, port_connection_stats_t>                  port_stats;  // Per-port statistics
 
 public:
         tcb_manager(const tcb_manager&) = delete;
@@ -98,14 +129,52 @@ public:
 public:
         int id() { return 0x06; }
 
-        // Connection limit statistics
+        // Global connection limit statistics
         uint32_t get_current_connections() const { return tcbs.size(); }
         uint32_t get_max_connections() const { return max_connections; }
         uint32_t get_peak_connections() const { return peak_connections; }
         uint32_t get_total_connections_created() const { return total_connections_created; }
 
-        // Check if at capacity
+        // Check if at global capacity
         bool is_at_capacity() const { return tcbs.size() >= max_connections; }
+
+        // Per-port connection statistics
+        port_connection_stats_t get_port_stats(uint16_t port) const {
+                auto it = port_stats.find(port);
+                if (it != port_stats.end()) {
+                        return it->second;
+                }
+                // Port not accessed yet - return empty stats
+                return port_connection_stats_t();
+        }
+
+        // Get current connections on specific port
+        uint32_t get_port_current_connections(uint16_t port) const {
+                auto it = port_stats.find(port);
+                if (it != port_stats.end()) {
+                        return it->second.current;
+                }
+                return 0;
+        }
+
+        // Get limit for specific port (includes env var lookup)
+        uint32_t get_port_limit(uint16_t port) const {
+                return connection_limits::get_port_limit(port);
+        }
+
+        // Check if specific port is at capacity
+        bool is_port_at_capacity(uint16_t port) const {
+                auto it = port_stats.find(port);
+                if (it != port_stats.end()) {
+                        return it->second.current >= it->second.max;
+                }
+                return false;
+        }
+
+        // List all active ports with statistics
+        std::map<uint16_t, port_connection_stats_t> get_all_port_stats() const {
+                return port_stats;
+        }
 
         // Recalculate connection count (clean up closed/cleaned TCBs if any)
         uint32_t cleanup_closed_connections() {
@@ -114,6 +183,13 @@ public:
                 while (it != tcbs.end()) {
                         if (it->second->state == TCP_CLOSED) {
                                 DLOG(INFO) << "[CLEANUP] Removing closed TCB " << it->first;
+                                // Update per-port stats
+                                uint16_t port = it->second->local_info->port_addr.value();
+                                if (port_stats.find(port) != port_stats.end()) {
+                                        if (port_stats[port].current > 0) {
+                                                port_stats[port].current--;
+                                        }
+                                }
                                 it = tcbs.erase(it);
                                 removed++;
                         } else {
@@ -151,31 +227,66 @@ public:
         bool register_tcb(
                 two_ends_t&                                                           two_end,
                 std::optional<std::shared_ptr<circle_buffer<std::shared_ptr<tcb_t>>>> listener) {
+                if (!two_end.remote_info || !two_end.local_info) {
+                        DLOG(FATAL) << "[EMPTY TCB]";
+                }
+
+                uint16_t port = two_end.local_info->port_addr.value();
+                uint32_t port_current = 0;
+                uint32_t port_max = 0;
+
+                // Initialize port stats if not seen before
+                if (port_stats.find(port) == port_stats.end()) {
+                        port_stats[port].max = connection_limits::get_port_limit(port);
+                        DLOG(INFO) << "[PORT CONFIG] Port " << port
+                                   << " limit: " << port_stats[port].max;
+                }
+
+                port_current = port_stats[port].current;
+                port_max = port_stats[port].max;
+
                 // Check global connection limit
                 if (tcbs.size() >= max_connections) {
-                        DLOG(WARNING) << "[CONNECTION LIMIT EXCEEDED] Current: " << tcbs.size()
+                        DLOG(WARNING) << "[GLOBAL LIMIT EXCEEDED] Current: " << tcbs.size()
                                       << " Max: " << max_connections
                                       << " Remote: " << two_end.remote_info.value();
+                        port_stats[port].total_rejected++;
+                        return false;  // Limit exceeded - caller will send RST
+                }
+
+                // Check per-port connection limit
+                if (port_current >= port_max) {
+                        DLOG(WARNING) << "[PORT LIMIT EXCEEDED] Port: " << port
+                                      << " Current: " << port_current
+                                      << " Max: " << port_max
+                                      << " Remote: " << two_end.remote_info.value();
+                        port_stats[port].total_rejected++;
                         return false;  // Limit exceeded - caller will send RST
                 }
 
                 DLOG(INFO) << "[REGISTER TCB] " << two_end
-                           << " (Connections: " << (tcbs.size() + 1) << "/" << max_connections << ")";
-
-                if (!two_end.remote_info || !two_end.local_info) {
-                        DLOG(FATAL) << "[EMPTY TCB]";
-                }
+                           << " (Global: " << (tcbs.size() + 1) << "/" << max_connections << ")"
+                           << " (Port " << port << ": " << (port_current + 1) << "/" << port_max << ")";
 
                 std::shared_ptr<tcb_t> tcb = std::make_shared<tcb_t>(this->active_tcbs, listener,
                                                                      two_end.remote_info.value(),
                                                                      two_end.local_info.value());
                 tcbs[two_end] = tcb;
 
-                // Track statistics
+                // Track global statistics
                 total_connections_created++;
                 if (tcbs.size() > peak_connections) {
                         peak_connections = tcbs.size();
-                        DLOG(INFO) << "[NEW PEAK] Concurrent connections: " << peak_connections;
+                        DLOG(INFO) << "[NEW PEAK] Global concurrent connections: " << peak_connections;
+                }
+
+                // Track per-port statistics
+                port_stats[port].current++;
+                port_stats[port].total_created++;
+                if (port_stats[port].current > port_stats[port].peak) {
+                        port_stats[port].peak = port_stats[port].current;
+                        DLOG(INFO) << "[NEW PEAK] Port " << port
+                                   << " concurrent connections: " << port_stats[port].peak;
                 }
 
                 return true;
