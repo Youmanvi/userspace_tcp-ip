@@ -11,6 +11,7 @@
 #include "tcb_manager.hpp"
 #include "tcp.hpp"
 #include "tuntap.hpp"
+#include "event_loop.hpp"
 
 namespace uStack {
 
