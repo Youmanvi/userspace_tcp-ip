@@ -22,6 +22,7 @@ struct socket_t {
         std::optional<ipv4_port_t>            local_info;
         std::optional<ipv4_port_t>            remote_info;
         std::optional<std::shared_ptr<tcb_t>> tcb;
+        bool                                  readable = false;  // Data in receive_queue
 };
 
 struct listener_t {
@@ -31,5 +32,6 @@ struct listener_t {
         int                                                    proto;
         std::shared_ptr<circle_buffer<std::shared_ptr<tcb_t>>> acceptors;
         std::optional<ipv4_port_t>                             local_info;
+        bool                                                   acceptable = false;  // Connection in acceptors queue
 };
 }  // namespace uStack

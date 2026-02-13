@@ -14,6 +14,7 @@
 #include "mac_addr.hpp"
 #include "packets.hpp"
 #include "utils.hpp"
+#include "event_loop.hpp"
 
 namespace uStack {
 
@@ -184,56 +185,46 @@ public:
                         return;
                 }
 
-                struct pollfd pollevent[1];
+                auto& evloop = event_loop::instance();
 
-                pollevent[0].fd = base_fd;
-
-                pollevent[0].events = POLLIN | POLLOUT;
-
-                DLOG(INFO) << "[TUNTAP LOOP]";
-                while (_available) {
-                        int ret = poll(pollevent, 1, -1);
-                        if (ret == -1) {
-                                LOG(FATAL) << "[POLL FAIL]";
-                                return;
-                        }
-
-                        if (pollevent[0].revents & POLLOUT) {
+                // Register TUN/TAP with event loop
+                evloop.register_tuntap(
+                        base_fd,
+                        // Read handler (POLLIN)
+                        [this, base_fd]() {
+                                if (_receiver_func) {
+                                        int len = MTU;
+                                        int n = read(base_fd, reinterpret_cast<char*>(_buf), len);
+                                        DLOG(INFO) << "[TUNTAP RECEIVE] " << n;
+                                        raw_packet r_packet = encode_raw_packet(
+                                                reinterpret_cast<uint8_t*>(_buf), n);
+                                        _receiver_func.value()(std::move(r_packet));
+                                } else {
+                                        LOG(FATAL) << "[NO RECEIVER FUNC]";
+                                }
+                        },
+                        // Write handler (POLLOUT)
+                        [this, base_fd]() {
                                 if (_provider_func) {
                                         std::optional<raw_packet> r_packet =
                                                 _provider_func.value()();
 
                                         if (r_packet) {
                                                 int len = MTU;
-
                                                 decode_raw_packet(r_packet.value(),
                                                                   reinterpret_cast<uint8_t*>(_buf),
                                                                   len);
-
                                                 DLOG(INFO) << "[TUNTAP WRITE] " << len;
-                                                write(pollevent[0].fd, _buf, len);
+                                                write(base_fd, _buf, len);
                                         }
                                 } else {
                                         LOG(FATAL) << "[NO PROVIDER FUNC]";
                                 }
                         }
-                        if (pollevent[0].revents & POLLIN) {
-                                if (_receiver_func) {
-                                        int len = MTU;
+                );
 
-                                        int n = read(pollevent[0].fd, _buf, len);
-
-                                        DLOG(INFO) << "[TUNTAP RECEIVE] " << n;
-
-                                        raw_packet r_packet = encode_raw_packet(
-                                                reinterpret_cast<uint8_t*>(_buf), n);
-
-                                        _receiver_func.value()(std::move(r_packet));
-                                } else {
-                                        LOG(FATAL) << "[NO RECEIVER FUNC]";
-                                }
-                        }
-                }
+                // Transfer control to event loop
+                evloop.run();
         }
 };
 };  // namespace uStack

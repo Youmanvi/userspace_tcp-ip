@@ -3,6 +3,7 @@
 #include "defination.hpp"
 #include "socket.hpp"
 #include "tcb_manager.hpp"
+#include "event_loop.hpp"
 
 namespace uStack {
 
@@ -63,39 +64,69 @@ public:
 
         int accept(int fd) {
                 if (listeners.find(fd) == listeners.end()) {
+                        errno = EBADF;
                         return -1;
                 }
-                while (listeners[fd]->acceptors->empty()) {
-                };
+
+                auto& listener = listeners[fd];
+
+                // Non-blocking: return EAGAIN if no connections
+                if (listener->acceptors->empty()) {
+                        errno = EAGAIN;
+                        return -1;
+                }
+
+                // Connection available - create socket
                 for (int i = 1; i < 65535; i++) {
                         if (sockets.find(i) == sockets.end()) {
-                                std::optional<std::shared_ptr<tcb_t>> tcb =
-                                        listeners[fd]->acceptors->pop_front();
-                                std::shared_ptr<socket_t> socket = std::make_shared<socket_t>();
+                                auto tcb = listener->acceptors->pop_front();
+                                auto socket = std::make_shared<socket_t>();
                                 socket->local_info               = tcb.value()->local_info;
                                 socket->remote_info              = tcb.value()->remote_info;
-                                socket->proto                    = listeners[fd]->proto;
+                                socket->proto                    = listener->proto;
                                 socket->state                    = SOCKET_CONNECTED;
                                 socket->tcb                      = tcb;
                                 socket->fd                       = i;
-                                sockets[i]                      = socket;
+                                sockets[i]                       = socket;
+
+                                // Clear acceptable if queue now empty
+                                if (listener->acceptors->empty()) {
+                                        listener->acceptable = false;
+                                }
+
                                 return i;
                         }
                 }
+                errno = EMFILE;
                 return -1;
         }
 
         int read(int fd, char* buf, int& len) {
                 if (sockets.find(fd) == sockets.end()) {
                         len = 0;
+                        errno = EBADF;
                         return -1;
                 }
-                std::shared_ptr<socket_t> socket = sockets[fd];
-                while (socket->tcb.value()->receive_queue.empty()) {
-                };
-                raw_packet r_packet =
-                        std::move(socket->tcb.value()->receive_queue.pop_front().value());
+
+                auto socket = sockets[fd];
+
+                // Non-blocking: return EAGAIN if no data
+                if (socket->tcb.value()->receive_queue.empty()) {
+                        len = 0;
+                        errno = EAGAIN;
+                        return -1;
+                }
+
+                // Data available
+                raw_packet r_packet = std::move(socket->tcb.value()->receive_queue.pop_front().value());
                 r_packet.buffer->export_data(reinterpret_cast<uint8_t*>(buf), len);
+
+                // Clear readable if queue now empty
+                if (socket->tcb.value()->receive_queue.empty()) {
+                        socket->readable = false;
+                }
+
+                return 0;
         }
 
         int write(int fd, char* buf, int& len) {
@@ -107,6 +138,23 @@ public:
                         std::make_unique<base_packet>(reinterpret_cast<uint8_t*>(buf), len);
                 raw_packet r_packet = {.buffer = std::move(out_buffer)};
                 socket->tcb.value()->send_queue.push_back(std::move(r_packet));
+        }
+
+        // Called from tcp_transmit when data arrives
+        void mark_socket_readable(std::shared_ptr<tcb_t> tcb) {
+                for (auto& [fd, socket] : sockets) {
+                        if (socket->tcb && socket->tcb.value() == tcb) {
+                                socket->readable = true;
+                                event_loop::instance().mark_readable(fd);
+                                return;
+                        }
+                }
+        }
+
+        // Called from tcb when connection completes
+        void mark_listener_acceptable(std::shared_ptr<listener_t> listener) {
+                listener->acceptable = true;
+                event_loop::instance().mark_acceptable(listener->fd);
         }
 };
 };  // namespace uStack
