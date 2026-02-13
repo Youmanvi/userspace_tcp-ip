@@ -74,9 +74,19 @@ void init_stack(int argc, char* argv[]) {
         tcp.register_upper_protocol(tcb_manager);
         LOG_INIT("Socket Manager registered");
 
-        LOG_INIT("TCP/IP stack initialization complete, starting event loop...");
+        LOG_INIT("TCP/IP stack initialization complete");
+}
+
+void start_event_loop() {
+        auto& tuntap_dev = tuntap<1500>::instance();
+        LOG_INIT("Starting event loop...");
         tuntap_dev.run();
-};
+}
+
+// Get event loop instance for registering callbacks
+event_loop& get_event_loop() {
+        return event_loop::instance();
+}
 
 int socket(int proto, ipv4_addr_t ipv4_addr, port_addr_t port_addr) {
         auto& socket_manager = socket_manager::instance();

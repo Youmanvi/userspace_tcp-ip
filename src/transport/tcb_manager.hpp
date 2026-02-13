@@ -10,6 +10,7 @@
 #include "socket.hpp"
 #include "tcb.hpp"
 #include "tcp_transmit.hpp"
+#include "socket_manager.hpp"
 
 namespace uStack {
 
@@ -102,6 +103,10 @@ public:
                                       .local_info  = in_packet.local_info};
                 if (tcbs.find(two_end) != tcbs.end()) {
                         tcp_transmit::tcp_in(tcbs[two_end], in_packet);
+                        // Notify socket manager if data arrived
+                        if (!tcbs[two_end]->receive_queue.empty()) {
+                                socket_manager::instance().mark_socket_readable(tcbs[two_end]);
+                        }
                 } else if (active_ports.find(in_packet.local_info.value()) != active_ports.end()) {
                         register_tcb(two_end,
                                      this->listeners[in_packet.local_info.value()]->acceptors);
@@ -109,6 +114,17 @@ public:
                                 tcbs[two_end]->state      = TCP_LISTEN;
                                 tcbs[two_end]->next_state = TCP_LISTEN;
                                 tcp_transmit::tcp_in(tcbs[two_end], in_packet);
+
+                                // Notify socket manager if connection completed
+                                auto listener = this->listeners[in_packet.local_info.value()];
+                                if (!listener->acceptors->empty()) {
+                                        socket_manager::instance().mark_listener_acceptable(listener);
+                                }
+
+                                // Notify socket manager if data arrived
+                                if (!tcbs[two_end]->receive_queue.empty()) {
+                                        socket_manager::instance().mark_socket_readable(tcbs[two_end]);
+                                }
                         } else {
                                 DLOG(ERROR) << "[REGISTER TCB FAIL]";
                         }

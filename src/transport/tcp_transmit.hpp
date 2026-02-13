@@ -3,11 +3,6 @@
 #include "tcb.hpp"
 #include <random>
 
-// Forward declaration for mark_socket_readable notification
-namespace uStack {
-class socket_manager;
-}
-
 namespace uStack {
 
 namespace docs {
@@ -774,10 +769,6 @@ public:
                                                                          header_len);
                                         raw_packet r_packet = {.buffer = std::move(out_buffer)};
                                         in_tcb->receive_queue.push_back(std::move(r_packet));
-
-                                        // Notify socket manager that socket is readable
-                                        socket_manager::instance().mark_socket_readable(in_tcb);
-
                                         in_tcb->active_self();
                                         break;
                                 }
