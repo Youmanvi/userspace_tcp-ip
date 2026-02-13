@@ -55,6 +55,26 @@ namespace connection_limits {
                 // No per-port limit set - use global default
                 return get_max_connections();
         }
+
+        // Listener backlog limits (pending connections in accept queue)
+        static const uint32_t DEFAULT_MAX_BACKLOG = 128;
+
+        // Get backlog limit from environment variable
+        // Format: MAX_BACKLOG_PORT_{PORT}={LIMIT}
+        // Example: MAX_BACKLOG_PORT_80=100
+        inline uint32_t get_backlog_limit(uint16_t port) {
+                std::string env_var_name = "MAX_BACKLOG_PORT_" + std::to_string(port);
+                const char* env_limit = std::getenv(env_var_name.c_str());
+                if (env_limit) {
+                        try {
+                                uint32_t limit = std::stoul(env_limit);
+                                if (limit > 0) return limit;
+                        } catch (...) {
+                                // Invalid env var, fall through to default
+                        }
+                }
+                return DEFAULT_MAX_BACKLOG;
+        }
 }  // namespace connection_limits
 
 // Per-port connection statistics
@@ -176,6 +196,56 @@ public:
                 return port_stats;
         }
 
+        // Listener backlog statistics (pending connections in accept queue)
+        backlog_stats_t get_listener_backlog_stats(ipv4_port_t port) const {
+                auto it = listeners.find(port);
+                if (it != listeners.end()) {
+                        return it->second->backlog_stats;
+                }
+                return backlog_stats_t();
+        }
+
+        // Check if listener backlog is at capacity
+        bool is_listener_backlog_full(ipv4_port_t port) const {
+                auto it = listeners.find(port);
+                if (it != listeners.end()) {
+                        return it->second->backlog_stats.current >= it->second->backlog_stats.max;
+                }
+                return false;
+        }
+
+        // Check backlog capacity before queuing connection
+        bool can_queue_to_backlog(ipv4_port_t port) const {
+                return !is_listener_backlog_full(port);
+        }
+
+        // Track connection added to backlog (called when connection goes ESTABLISHED)
+        void track_backlog_queued(ipv4_port_t port) {
+                auto it = listeners.find(port);
+                if (it != listeners.end()) {
+                        it->second->backlog_stats.current++;
+                        it->second->backlog_stats.total_queued++;
+                        if (it->second->backlog_stats.current > it->second->backlog_stats.peak) {
+                                it->second->backlog_stats.peak = it->second->backlog_stats.current;
+                                DLOG(INFO) << "[NEW PEAK] Listener " << port.port_addr.value()
+                                           << " pending connections: " << it->second->backlog_stats.peak;
+                        }
+                        DLOG(INFO) << "[BACKLOG QUEUED] Port " << port.port_addr.value()
+                                   << " current=" << it->second->backlog_stats.current
+                                   << " max=" << it->second->backlog_stats.max;
+                }
+        }
+
+        // Track connection removed from backlog (called when application accepts)
+        void track_backlog_dequeued(ipv4_port_t port) {
+                auto it = listeners.find(port);
+                if (it != listeners.end() && it->second->backlog_stats.current > 0) {
+                        it->second->backlog_stats.current--;
+                        DLOG(INFO) << "[BACKLOG DEQUEUED] Port " << port.port_addr.value()
+                                   << " current=" << it->second->backlog_stats.current;
+                }
+        }
+
         // Recalculate connection count (clean up closed/cleaned TCBs if any)
         uint32_t cleanup_closed_connections() {
                 uint32_t removed = 0;
@@ -220,6 +290,12 @@ public:
         void listen_port(ipv4_port_t ipv4_port, std::shared_ptr<listener_t> listener) {
                 this->listeners[ipv4_port] = listener;
                 active_ports.insert(ipv4_port);
+
+                // Initialize backlog stats for this listener
+                uint16_t port = ipv4_port.port_addr.value();
+                listener->backlog_stats.max = connection_limits::get_backlog_limit(port);
+                DLOG(INFO) << "[LISTEN PORT CONFIG] Port " << port
+                           << " backlog limit: " << listener->backlog_stats.max;
         }
 
         // Register a new TCB. Returns true if successful, false if limit exceeded.
