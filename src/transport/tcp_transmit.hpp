@@ -616,8 +616,30 @@ public:
                                 case TCP_CLOSING:
                                         if (in_tcb->send.unacknowledged < in_tcp.ack_no &&
                                             in_tcp.ack_no <= in_tcb->send.next) {
+                                                // Calculate bytes that were just acknowledged
+                                                uint32_t bytes_acked = in_tcp.ack_no - in_tcb->send.unacknowledged;
+
+                                                // Update unacknowledged pointer
                                                 in_tcb->send.unacknowledged = in_tcp.ack_no;
-                                                // TODO: update windows
+
+                                                // Update bytes in flight (congestion control)
+                                                if (in_tcb->send.bytes_in_flight >= bytes_acked) {
+                                                        in_tcb->send.bytes_in_flight -= bytes_acked;
+                                                } else {
+                                                        in_tcb->send.bytes_in_flight = 0;
+                                                }
+
+                                                // TCP Reno Congestion Avoidance (only in ESTABLISHED state)
+                                                if (in_tcb->state == TCP_ESTABLISHED && in_tcb->send.cwnd > 0) {
+                                                        // Increase cwnd by (MSS * MSS) / cwnd per ACK
+                                                        // This approximates adding 1 MSS per RTT
+                                                        uint32_t cwnd_increase = (in_tcb->send.mss * in_tcb->send.mss) / in_tcb->send.cwnd;
+                                                        if (cwnd_increase == 0) cwnd_increase = 1;
+                                                        in_tcb->send.cwnd += cwnd_increase;
+
+                                                        DLOG(INFO) << "[CONGESTION AVOIDANCE] cwnd=" << in_tcb->send.cwnd
+                                                                   << " bytes_in_flight=" << in_tcb->send.bytes_in_flight;
+                                                }
                                         }
 
                                         if (in_tcp.ack_no <

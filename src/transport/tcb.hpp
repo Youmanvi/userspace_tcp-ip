@@ -91,6 +91,12 @@ struct tcb_t : public std::enable_shared_from_this<tcb_t> {
                 send.bytes_in_flight = 0;
         }
 
+        // Track bytes sent (updates bytes_in_flight)
+        // Called by make_packet() when actually sending data
+        void track_bytes_sent(uint32_t bytes) {
+                send.bytes_in_flight += bytes;
+        }
+
         void active_self() { _active_tcbs->push_back(shared_from_this()); }
 
         // TCP Reno: Can only send if bytes in flight < congestion window
